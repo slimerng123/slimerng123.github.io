@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Upgrade Tree</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b0c10;--surface:#13151c;--border:#252836;--border2:#333650;--text:#dde1f0;--accent2:#7eb3ff;--gold:#f5c842;--gold-bg:#2a1f00;--gold-bd:#5a3f00;--purple:#a78bfa;--purple-bg:#1a0d2e;--purple-bd:#4c1d95;--font-ui:'Syne',sans-serif;--font-mono:'JetBrains Mono',monospace;}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--font-ui);cursor:grab;}
+body.dragging{cursor:grabbing;}
+#viewport{width:100%;height:100%;position:relative;overflow:hidden;background:var(--bg);background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:24px 24px;}
+#scene{position:absolute;top:0;left:0;transform-origin:0 0;}
+#img-wrapper{position:relative;display:inline-block;line-height:0;user-select:none;}
+#tree-img{display:block;max-width:none;pointer-events:none;user-select:none;-webkit-user-drag:none;}
+.bg-overlay{position:absolute;pointer-events:none;}
+.bg-overlay img{display:block;width:100%;height:100%;object-fit:fill;pointer-events:none;}
+/* All nodes are invisible hitboxes — transparent by default */
+.hnode{position:absolute;transform:translate(-50%,-50%);cursor:pointer;pointer-events:all;z-index:10;}
+.hnode svg{display:block;}
+.hnode polygon{fill:transparent;stroke:none;}
+/* Back button */
+#back-btn{display:none;position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:200;padding:7px 18px;font-size:13px;font-weight:700;background:var(--purple-bg);border:1.5px solid var(--purple);color:var(--purple);border-radius:20px;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,0.6);letter-spacing:0.04em;font-family:var(--font-ui);}
+#back-btn:hover{background:#2a1040;}
+/* Tooltip */
+#tooltip{position:fixed;z-index:9999;pointer-events:none;background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:11px 14px;max-width:230px;display:none;box-shadow:0 6px 28px rgba(0,0,0,0.7);}
+.tip-name{font-size:14px;font-weight:700;color:var(--accent2);margin-bottom:5px;}
+.tip-cost{display:inline-flex;align-items:center;gap:5px;background:var(--gold-bg);border:1px solid var(--gold-bd);color:var(--gold);font-family:var(--font-mono);font-size:12px;font-weight:600;border-radius:5px;padding:3px 9px;margin-bottom:7px;}
+.tip-cost::before{content:'◈';font-size:10px;}
+.tip-desc{font-size:12px;color:#7a82a8;line-height:1.6;}
+</style>
+</head>
+<body>
+<div id="viewport"><div id="scene"><div id="img-wrapper"><img id="tree-img" alt="Upgrade Tree"></div></div></div>
+<button id="back-btn">← Back to Main Tree</button>
+<div id="tooltip"><div class="tip-name" id="t-name"></div><div class="tip-cost" id="t-cost"></div><div class="tip-desc" id="t-desc"></div></div>
+<script>
+const HEX_R=64;
+const nodes=[{"px":66.82,"py":62.6,"name":"Backpack","cost":"100 coins","desc":"Unlock the Backpack so you can manage slime equips.","special":false,"secondarySrc":""},{"px":48.9886,"py":77.4467,"name":"Extra Diamond Rolls","cost":"250m coins","desc":"Diamond roll every 90th roll!","special":false,"secondarySrc":""},{"px":48.9311,"py":84.6756,"name":"Ultra Diamond Rolls","cost":"5b coins","desc":"Diamond roll every 75th roll!","special":false,"secondarySrc":""},{"px":48.8768,"py":92.04,"name":"Luckier Diamond Rolls","cost":"50b coins","desc":"6.5x luck on diamond rolls!","special":false,"secondarySrc":""},{"px":39.9546,"py":84.6972,"name":"Ultra Void Rolls","cost":"3T coins","desc":"Void roll every 900th roll!","special":false,"secondarySrc":""},{"px":35.5004,"py":88.4794,"name":"Luckier Void Rolls","cost":"30T coins","desc":"65x luck on void rolls!","special":false,"secondarySrc":""},{"px":39.9675,"py":77.3311,"name":"Extra Void Rolls","cost":"150B coins","desc":"Void roll every 950th roll!","special":false,"secondarySrc":""},{"px":53.3885,"py":73.6167,"name":"Diamond Rolls","cost":"20m coins","desc":"Every 100th roll has 5x luck!","special":false,"secondarySrc":""},{"px":57.9586,"py":84.6061,"name":"Luckier Golden Rolls","cost":"100m coins","desc":"2.5x luck of golden rolls!","special":false,"secondarySrc":""},{"px":44.4346,"py":73.6411,"name":"Void Rolls","cost":"15b coins","desc":"Every 1,000th roll has 50x luck!","special":false,"secondarySrc":""},{"px":57.8468,"py":77.2233,"name":"Ultra Golden Rolls","cost":"2m coins","desc":"Golden roll every 8th roll!","special":false,"secondarySrc":""},{"px":57.8436,"py":69.8572,"name":"Extra Golden Rolls","cost":"50k coins","desc":"Golden roll every 9th roll","special":false,"secondarySrc":""},{"px":62.3236,"py":73.5106,"name":"Player","cost":"Prices will come soon","desc":"","special":true,"secondarySrc":"","overlayIdx":null},{"px":62.2821,"py":66.1822,"name":"Golden Rolls","cost":"1.00K coins","desc":"Every 0th roll has 2x luck!","special":false,"secondarySrc":""},{"px":57.9554,"py":62.5472,"name":"Luck I","cost":"1.50k coins","desc":"Increases luck by 50%","special":false,"secondarySrc":""},{"px":53.407854954034725,"py":58.81777777777778,"name":"Luck II","cost":"10k coins","desc":"Increases luck by 100%","special":false,"secondarySrc":""},{"px":48.88,"py":55.2967,"name":"Luck III","cost":"100k coins","desc":"Increases luck by 150%","special":false,"secondarySrc":""},{"px":44.4064,"py":58.8722,"name":"Super Luck I","cost":"1m coins","desc":"Increases luck by 200%","special":false,"secondarySrc":""},{"px":40.0154,"py":62.5222,"name":"Super Luck II","cost":"5m coins","desc":"Increases luck by 250%","special":false,"secondarySrc":""},{"px":35.4332,"py":66.26,"name":"Super Luck III","cost":"25m coins","desc":"Increases luck by 300%","special":false,"secondarySrc":""},{"px":30.9464,"py":70.0439,"name":"Ultra Luck I","cost":"125m coins","desc":"Increases luck by 350%","special":false,"secondarySrc":""},{"px":26.4089,"py":66.2683,"name":"Ultra Luck II","cost":"625m coins","desc":"Increases luck by 400%","special":false,"secondarySrc":""},{"px":21.9189,"py":62.5472,"name":"Ultra Luck III","cost":"3.1b coins","desc":"Increases luck by 450%","special":false,"secondarySrc":""},{"px":17.4389,"py":58.8028,"name":"Supreme Luck I","cost":"20b coins","desc":"Increases luck by 500%","special":false,"secondarySrc":""},{"px":12.86,"py":62.4694,"name":"Supreme Luck II","cost":"140B coins","desc":"Increases luck by 550%","special":false,"secondarySrc":""},{"px":12.8436,"py":69.9894,"name":"Supreme Luck III","cost":"1T coins","desc":"Increases luck by 600%","special":false,"secondarySrc":""},{"px":12.8632,"py":77.2233,"name":"Epic Luck I","cost":"8T coins","desc":"Increases luck by 650%","special":false,"secondarySrc":""},{"px":8.2679,"py":73.3867,"name":"Epic Luck II","cost":"64T coins","desc":"Increases luck by 700%","special":false,"secondarySrc":""},{"px":3.89,"py":69.7811,"name":"Epic Luck III","cost":"1Qd coins","desc":"Increases luck by 750%","special":false,"secondarySrc":""},{"px":66.8711,"py":84.6044,"name":"Bonus Frenzy","cost":"10k dice","desc":"Bonus rolls happen 15% more often","special":false,"secondarySrc":""},{"px":71.3446,"py":80.89,"name":"Bonus Chains","cost":"5k dice","desc":"Bonus rolls happen 10% more often","special":false,"secondarySrc":""},{"px":71.4564,"py":73.4328,"name":"Bonus Chance","cost":"300 dice","desc":"Bonus rolls happen 5% more often","special":false,"secondarySrc":""},{"px":71.45,"py":66.2683,"name":"Roll Speed","cost":"25 dice","desc":"Increases roll speed by 10%","special":false,"secondarySrc":""},{"px":75.9268,"py":69.9894,"name":"Faster Rolls","cost":"100 dice","desc":"Increases roll speed by 20%","special":false,"secondarySrc":""},{"px":80.4168,"py":73.6017,"name":"Rapid Rolls","cost":"1.00K dice","desc":"Increases roll speed by 30%","special":false,"secondarySrc":""},{"px":80.3786,"py":81.0156,"name":"Quick Rolls","cost":"3k dice","desc":"Increases roll speed by 40%","special":false,"secondarySrc":""},{"px":80.4232,"py":88.5506,"name":"Speed Rolls","cost":"9k rolls","desc":"Increases roll speed by 50%","special":false,"secondarySrc":""},{"px":80.4264,"py":95.7778,"name":"Lightning Rolls","cost":"27k dice","desc":"Increases roll speed by 60%","special":false,"secondarySrc":""},{"px":84.9,"py":84.6211,"name":"Extra Rolls","cost":"6k dice","desc":"You have a 1% chance to spawn another roll column","special":false,"secondarySrc":""},{"px":89.4346,"py":81.0606,"name":"Bonus Column","cost":"15k dice","desc":"You have a 2% chance to spawn another roll column","special":false,"secondarySrc":""},{"px":93.9657,"py":84.55,"name":"Column Surge","cost":"35k dice","desc":"You have a 3% chance to spawn another roll column","special":false,"secondarySrc":""},{"px":89.4379,"py":66.3906,"name":"More Clovers IV","cost":"70k dice","desc":"Clover rolls happen 40% more often!","special":false,"secondarySrc":""},{"px":93.96567252298263,"py":62.48446666666666,"name":"More Clovers V","cost":"210k dice","desc":"Clover rolls happen 50% more often!","special":false,"secondarySrc":""},{"px":84.8968,"py":62.6778,"name":"More Clovers III","cost":"10k dice","desc":"Clover rolls happen 30% more often!","special":false,"secondarySrc":""},{"px":80.3625,"py":59.0261,"name":"More Clovers II","cost":"1.5k dice","desc":"Clover rolls happen 20% more often!","special":false,"secondarySrc":""},{"px":75.8986,"py":62.6083,"name":"More Clovers","cost":"125 dice","desc":"Clover rolls happen 10% more often!","special":false,"secondarySrc":""},{"px":66.97,"py":55.1578,"name":"Auto Roll","cost":"200 coins","desc":"Unlocks Auto Roll.","special":false,"secondarySrc":""},{"px":71.6064,"py":51.6217,"name":"2 Enemies","cost":"100 coins","desc":"Increase active enemies to 2.","special":false,"secondarySrc":""},{"px":75.8821,"py":47.97,"name":"3 Enemies","cost":"3.00K coins","desc":"Increase active enemies to 3.","special":false,"secondarySrc":""},{"px":80.3721,"py":44.3167,"name":"4 Enemies","cost":"100k coins","desc":"Increase active enemies to 4.","special":false,"secondarySrc":""},{"px":84.9575,"py":40.5178,"name":"5 Enemies","cost":"5M coins","desc":"Increase active enemies to 5.","special":false,"secondarySrc":""},{"px":89.4921,"py":36.6594,"name":"6 Enemies","cost":"400M coins","desc":"Increase active enemies to 6.","special":false,"secondarySrc":""},{"px":93.9275,"py":33.0061,"name":"7 Enemies","cost":"50b coins","desc":"Increase active enemies to 7.","special":false,"secondarySrc":""},{"px":84.9607,"py":33.2061,"name":"Enemy Rush I","cost":"25m coins","desc":"20% faster enemy spawns.","special":false,"secondarySrc":""},{"px":85.0118,"py":25.7572,"name":"Enemy Rush II","cost":"250m coins","desc":"40% faster enemy spawns.","special":false,"secondarySrc":""},{"px":84.8936,"py":18.4833,"name":"Enemy Rush III","cost":"5b coins","desc":"65% faster enemy spawns.","special":false,"secondarySrc":""},{"px":75.9203,"py":40.5722,"name":"Goop","cost":"10m coins","desc":"Enemies can now drop goop! (Used to rebirth)","special":false,"secondarySrc":""},{"px":75.93,"py":33.1367,"name":"Goop Drip","cost":"250m coins","desc":"35% goop drop chance.","special":false,"secondarySrc":""},{"px":75.8821,"py":25.8117,"name":"Goop Flood","cost":"20b coins","desc":"45% goop drop chance","special":false,"secondarySrc":""},{"px":71.4468,"py":21.8872,"name":"Goop Chance I","cost":"4T coins","desc":"55% goop drop chance","special":false,"secondarySrc":""},{"px":71.3,"py":14.84,"name":"Goop Chance II","cost":"500T coins","desc":"65% goop drop chance","special":false,"secondarySrc":""},{"px":71.35107252298263,"py":7.233888888888889,"name":"Goop Chance III","cost":"75Qd coins","desc":"75% goop drop chance.","special":false,"secondarySrc":""},{"px":76.03214504596528,"py":3.798888888888889,"name":"Goop Chance IV","cost":"10Qn coins","desc":"85% goop drop chance.","special":false,"secondarySrc":""},{"px":62.42892747701736,"py":51.49782222222222,"name":"3 Slime Slots","cost":"750 coins","desc":"Unlock 3 Slime Slots.","special":false,"secondarySrc":""},{"px":66.9668,"py":47.775,"name":"Loot","cost":"Prices will come soon","desc":"","special":true,"secondarySrc":"","overlayIdx":null},{"px":57.9425,"py":47.97,"name":"4 Slime Slots","cost":"5.00k coins","desc":"Unlock 4 Slime Slots.","special":false,"secondarySrc":""},{"px":53.5068,"py":44.2406,"name":"Big Slimes","cost":"75k coins","desc":"Rare chance to roll big slimes (x100 rarer)","special":false,"secondarySrc":""},{"px":48.9821,"py":40.5344,"name":"Huge Slimes","cost":"100M coins","desc":"Extremely rare chance to roll huge slimes! (x1,000 rarer)","special":false,"secondarySrc":""},{"px":48.9311,"py":33.3383,"name":"Inverted Slimes","cost":"1b coins","desc":"Ultra rare chance to roll inverted slimes! (x2,500 rarer)","special":false,"secondarySrc":""},{"px":53.4461,"py":36.8511,"name":"Shiny Slimes","cost":"3M coins","desc":"Very rare chance to roll shiny slimes! (x250 rarer)","special":false,"secondarySrc":""},{"px":58.1693,"py":40.4717,"name":"5 Slime Slots","cost":"250k coins","desc":"Unlock 5 Slime Slots.","special":false,"secondarySrc":""},{"px":62.4768,"py":36.8278,"name":"6 Slime Slots","cost":"400m coins","desc":"Unlock 6 Slime Slots.","special":false,"secondarySrc":""},{"px":66.97,"py":33.0606,"name":"7 Slime Slots","cost":"600m coins","desc":"Unlock 7 Slime Slots.","special":false,"secondarySrc":""},{"px":62.48,"py":29.6006,"name":"Target Range I","cost":"30M coins","desc":"15% more slime target range!","special":false,"secondarySrc":""},{"px":57.9489,"py":25.9639,"name":"Target Range II","cost":"450m coins","desc":"30% more slime target range!","special":false,"secondarySrc":""},{"px":57.9489,"py":18.2617,"name":"Target Range III","cost":"8b coins","desc":"50% more slime target range!","special":false,"secondarySrc":""},{"px":44.4889,"py":51.6133,"name":"Friendly Luck I","cost":"350k coins","desc":"Friend boost limit increased to 1","special":false,"secondarySrc":""},{"px":39.8143,"py":47.775,"name":"Friendly Luck II","cost":"900k coins","desc":"Friend boost limit increased to 2","special":false,"secondarySrc":""},{"px":35.3918,"py":44.1928,"name":"Friendly Luck IV","cost":"1b coins","desc":"Friend boost limit increased to 4","special":false,"secondarySrc":""},{"px":35.4268,"py":51.5606,"name":"Friendly Luck III","cost":"2m coins","desc":"Friend boost limit increased to 3","special":false,"secondarySrc":""},{"px":30.9879,"py":55.295,"name":"Friendly Boost I","cost":"7.5m coins","desc":"Increases luck by +1.5 per friend","special":false,"secondarySrc":""},{"px":26.4025,"py":51.6517,"name":"Friendly Boost II","cost":"7.5b coins","desc":"Increases luck by +2.0 per friend","special":false,"secondarySrc":""},{"px":26.4568,"py":44.1778,"name":"Friendly Boost III","cost":"7.5T coins","desc":"Increases luck by +2.5 per friend","special":false,"secondarySrc":""},{"px":21.9668,"py":40.5739,"name":"Friendly Boost IV","cost":"7.50Qd coins","desc":"Increases luck by +3.0 per friend","special":false,"secondarySrc":""},{"px":30.94,"py":33.13,"name":"Friendly Luck VI","cost":"1Qd coins","desc":"Friend boost limit increased to 6","special":false,"secondarySrc":""},{"px":35.4779,"py":36.7139,"name":"Friendly Luck V","cost":"1T coins","desc":"Friend boost limit increased to 5","special":false,"secondarySrc":""},{"px":66.80286006128703,"py":69.8263888888889,"name":"Walk Speed I","cost":"30k coins","desc":"Move Faster!","special":false,"secondarySrc":"","overlayIdx":0},{"px":71.29724208375895,"py":66.28472222222223,"name":"Teleporter","cost":"1m coins","desc":"Unlock the teleporter menu","special":false,"secondarySrc":"","overlayIdx":0},{"px":71.29724208375895,"py":73.64583333333334,"name":"Walk Speed II","cost":"100k coins","desc":"Walk even faster!","special":false,"secondarySrc":"","overlayIdx":0},{"px":75.74055158324822,"py":69.89583333333334,"name":"Walk Speed III","cost":"2m coins","desc":"Move even faster!","special":false,"secondarySrc":"","overlayIdx":0},{"px":71.29724208375895,"py":80.9375,"name":"Magnet I","cost":"500k coins","desc":"Attract nearby loot","special":false,"secondarySrc":"","overlayIdx":0},{"px":75.74055158324822,"py":84.54861111111111,"name":"Magnet II","cost":"500m coins","desc":"Range increased!","special":false,"secondarySrc":"","overlayIdx":0},{"px":80.23493360572013,"py":80.65972222222223,"name":"Magnet III","cost":"500b coins","desc":"Range increased!","special":false,"secondarySrc":"","overlayIdx":0},{"px":84.93360572012257,"py":47.8125,"name":"Big Enemies","cost":"750k coins","desc":"Enemies can rarely mutate into Big.","special":false,"secondarySrc":"","overlayIdx":null},{"px":89.37691521961185,"py":51.49305555555556,"name":"Shiny Enemies","cost":"30M coins","desc":"Enemies can very rarely mutate into Shiny.","special":false,"secondarySrc":"","overlayIdx":null},{"px":93.82022471910112,"py":47.673611111111114,"name":"Huge Enemies","cost":"1B coins","desc":"Enemies can extremely rarely mutate into Huge.","special":false,"secondarySrc":"","overlayIdx":null},{"px":98.2635342185904,"py":43.923611111111114,"name":"Inverted Enemies","cost":"10B coins","desc":"Enemies can ultra rarely mutate into Inverted.","special":false,"secondarySrc":"","overlayIdx":null},{"px":98.36567926455567,"py":51.354166666666664,"name":"More Big Enemies","cost":"750B coins","desc":"10% more often.","special":false,"secondarySrc":"","overlayIdx":null},{"px":102.7579162410623,"py":54.895833333333336,"name":"More Shiny Enemies","cost":"30T coins","desc":"10% more often.","special":false,"secondarySrc":"","overlayIdx":null},{"px":107.30337078651685,"py":51.145833333333336,"name":"More Huge Enemies","cost":"1Qd coins","desc":"10% more often.","special":false,"secondarySrc":"","overlayIdx":null},{"px":107.20122574055159,"py":43.923611111111114,"name":"More Inverted Enemies","cost":"10Qd coins","desc":"10% more often.","special":false,"secondarySrc":"","overlayIdx":null},{"px":66.85393258426967,"py":40.55555555555556,"name":"Apple","cost":"1k coins","desc":"Unlock Apple as enemy loot.","special":false,"secondarySrc":"","overlayIdx":2},{"px":62.51276813074566,"py":51.66666666666667,"name":"Coin Income I","cost":"100k coins","desc":"25% more coins!","special":false,"secondarySrc":"","overlayIdx":2},{"px":57.91624106230848,"py":55.55555555555556,"name":"Coin Income II","cost":"1m coins","desc":"50% more coins!","special":false,"secondarySrc":"","overlayIdx":2},{"px":53.52400408580184,"py":58.88888888888889,"name":"Coin Income III","cost":"10m coins","desc":"100% more coins!","special":false,"secondarySrc":"","overlayIdx":2},{"px":53.57507660878448,"py":66.25,"name":"Coin Income IV","cost":"100m coins","desc":"150% more coins!","special":false,"secondarySrc":"","overlayIdx":2},{"px":48.978549540347295,"py":70.06944444444444,"name":"Coin Income V","cost":"1B coins","desc":"200% more coins!","special":false,"secondarySrc":"","overlayIdx":2},{"px":44.68845760980592,"py":66.1111111111111,"name":"Coin Income VI","cost":"10B coins","desc":"250% more coins!","special":false,"secondarySrc":"","overlayIdx":2},{"px":40.143003064351376,"py":62.63888888888889,"name":"Coin Income VII","cost":"100B coins","desc":"300% more coins!","special":false,"secondarySrc":"","overlayIdx":2},{"px":35.75076608784474,"py":66.18055555555556,"name":"Coin Income VIII","cost":"1T coins","desc":"350% more coins!","special":false,"secondarySrc":"","overlayIdx":2},{"px":30.89887640449438,"py":62.708333333333336,"name":"Coin Income IX","cost":"10T coins","desc":"400% more coins!","special":false,"secondarySrc":"","overlayIdx":2},{"px":30.89887640449438,"py":55.27777777777778,"name":"Coin Income X","cost":"100T coins","desc":"450% more coins!","special":false,"secondarySrc":"","overlayIdx":2},{"px":30.847803881511744,"py":48.125,"name":"Coin Income XI","cost":"1Qd coins","desc":"500% more coins!","special":false,"secondarySrc":"","overlayIdx":2},{"px":30.79673135852911,"py":40.763888888888886,"name":"Coin Income  XII","cost":"10Qd coins","desc":"550% more coins!","special":false,"secondarySrc":"","overlayIdx":2},{"px":35.59754851889683,"py":37.08333333333333,"name":"Coin Income XIII","cost":"100Qd coins","desc":"600% more coins!","special":false,"secondarySrc":"","overlayIdx":2},{"px":58.06945863125639,"py":48.263888888888886,"name":"Offline Loot I","cost":"1m coins","desc":"10% more offline loot!","special":false,"secondarySrc":"","overlayIdx":2},{"px":53.37078651685393,"py":44.513888888888886,"name":"Offline Loot II","cost":"1b coins","desc":"25% more offline loot!","special":false,"secondarySrc":"","overlayIdx":2},{"px":48.92747701736466,"py":48.05555555555555,"name":"Offline Loot III","cost":"1T coins","desc":"50% more offline loot!","special":false,"secondarySrc":"","overlayIdx":2},{"px":44.484167517875385,"py":51.875,"name":"Offline Loot IV","cost":"1Qd coins","desc":"75% more offline loot!","special":false,"secondarySrc":"","overlayIdx":2},{"px":39.989785495403474,"py":48.05555555555555,"name":"Offline Loot V","cost":"1Qn coins","desc":"100% more offline loot!","special":false,"secondarySrc":"","overlayIdx":2},{"px":66.95607763023493,"py":33.19444444444444,"name":"Carrot","cost":"10k coins","desc":"Unlock Carrot as enemy loot.","special":false,"secondarySrc":"","overlayIdx":2},{"px":62.359550561797754,"py":29.58333333333333,"name":"Cherries","cost":"50k coins","desc":"Unlock Cherries as enemy loot.","special":false,"secondarySrc":"","overlayIdx":2},{"px":57.91624106230848,"py":33.125,"name":"Grapes","cost":"500k coins","desc":"Unlock Grapes as enemy loot.","special":false,"secondarySrc":"","overlayIdx":2},{"px":53.57507660878447,"py":29.58333333333333,"name":"Banana","cost":"2m coins","desc":"Unlock Banana as enemy loot.","special":false,"secondarySrc":"","overlayIdx":2},{"px":53.52400408580184,"py":22.5,"name":"Watermelon","cost":"20m coins","desc":"Unlock Watermelon as enemy loot.","special":false,"secondarySrc":"","overlayIdx":2},{"px":58.01838610827375,"py":18.680555555555557,"name":"Pizza","cost":"200m coins","desc":"Unlock Pizza as enemy loot.","special":false,"secondarySrc":"","overlayIdx":2},{"px":62.51276813074566,"py":14.930555555555557,"name":"Chicken","cost":"2b coins","desc":"Unlock Chicken as enemy loot.","special":false,"secondarySrc":"","overlayIdx":2},{"px":66.85393258426967,"py":18.75,"name":"Drumstick","cost":"20b coins","desc":"Unlock Drumstick as enemy loot.","special":false,"secondarySrc":"","overlayIdx":2},{"px":71.45045965270684,"py":51.388888888888886,"name":"Luck Boost","cost":"4k coins","desc":"Unlock Luck Boost as enemy loot.","special":false,"secondarySrc":"","overlayIdx":2},{"px":75.94484167517875,"py":55.20833333333333,"name":"Roll Speed Boost","cost":"100k coins","desc":"Unlock Roll Speed Boost as enemy loot.","special":false,"secondarySrc":"","overlayIdx":2},{"px":80.33707865168539,"py":58.888888888888886,"name":"Ultra Luck Boost","cost":"1m coins","desc":"Unlock Ultra Luck Boost as enemy loot.","special":false,"secondarySrc":"","overlayIdx":2},{"px":71.3993871297242,"py":58.888888888888886,"name":"Currency Boost","cost":"25k coins","desc":"Unlock Currency Boost as enemy loot.","special":false,"secondarySrc":"","overlayIdx":2},{"px":57.96731358529111,"py":62.638888888888886,"name":"Overkill I","cost":"1b coins","desc":"Overkill enemies for up to 33% bonus coins.","special":false,"secondarySrc":"","overlayIdx":2},{"px":62.46169560776302,"py":66.04166666666667,"name":"Overkill II","cost":"100b coins","desc":"Overkill enemies for up to 66% bonus coins.","special":false,"secondarySrc":"","overlayIdx":2},{"px":67.00715015321757,"py":77.01388888888889,"name":"Overkill IV","cost":"10T coins","desc":"Overkill enemies for up to 166% bonus coins.","special":false,"secondarySrc":"","overlayIdx":2},{"px":71.3993871297242,"py":73.54166666666667,"name":"Overkill V","cost":"100T coins","desc":"Overkill enemies for up to 200% bonus coins.","special":false,"secondarySrc":"","overlayIdx":2},{"px":76.04698672114402,"py":77.36111111111111,"name":"Overkill VI","cost":"1Qd coins","desc":"Overkill enemies for up to 233% bonus coins.","special":false,"secondarySrc":"","overlayIdx":2},{"px":62.461695607763026,"py":73.88888888888889,"name":"Overkill III","cost":"1T coins","desc":"Overkill enemies for up to 133% bonus coins.","special":false,"secondarySrc":"","overlayIdx":2}];
+const overlaysData=[{"src":"https://i.imgur.com/83WNUaT.png","x":1120,"y":887,"w":548,"h":395,"naturalW":970,"naturalH":700,"locked":true,"special":true,"linkedNodeIdx":12},{"src":"https://i.imgur.com/1YcVAr9.png","x":1606,"y":551,"w":582,"h":311,"naturalW":1098,"naturalH":587,"locked":true},{"src":"https://i.imgur.com/ZGZKTWM.png","x":529,"y":163,"w":1117,"h":1033,"naturalW":1048,"naturalH":969,"locked":true,"special":true,"linkedNodeIdx":64},{"src":"https://files.catbox.moe/4craae.png","x":1343,"y":-15,"w":205,"h":185,"naturalW":432,"naturalH":390,"locked":true}];
+const IMG_SRC="https://i.imgur.com/hVSZZjG.png";
+
+const scene=document.getElementById('scene');
+const imgWrapper=document.getElementById('img-wrapper');
+const treeImg=document.getElementById('tree-img');
+const tooltip=document.getElementById('tooltip');
+const backBtn=document.getElementById('back-btn');
+
+let activeSpecialOverlay=null;
+
+// ── PAN & ZOOM ──
+let panX=0,panY=0,scale=1,isPanning=false,hasPanned=false,panStartX=0,panStartY=0,panOriginX=0,panOriginY=0;
+const MIN_SCALE=0.1,MAX_SCALE=4;
+function applyTransform(){scene.style.transform=`translate(${panX}px,${panY}px) scale(${scale})`;}
+document.addEventListener('mousedown',e=>{isPanning=true;hasPanned=false;panStartX=e.clientX;panStartY=e.clientY;panOriginX=panX;panOriginY=panY;document.body.classList.add('dragging');});
+document.addEventListener('mousemove',e=>{if(!isPanning)return;const dx=e.clientX-panStartX,dy=e.clientY-panStartY;if(!hasPanned&&Math.abs(dx)<3&&Math.abs(dy)<3)return;hasPanned=true;panX=panOriginX+dx;panY=panOriginY+dy;applyTransform();});
+document.addEventListener('mouseup',()=>{isPanning=false;setTimeout(()=>{hasPanned=false;},50);document.body.classList.remove('dragging');});
+document.getElementById('viewport').addEventListener('wheel',e=>{e.preventDefault();const factor=e.deltaY<0?1.1:0.9;const newScale=Math.min(MAX_SCALE,Math.max(MIN_SCALE,scale*factor));const rect=document.getElementById('viewport').getBoundingClientRect();const mx=e.clientX-rect.left,my=e.clientY-rect.top;panX=mx-(mx-panX)*(newScale/scale);panY=my-(my-panY)*(newScale/scale);scale=newScale;applyTransform();},{passive:false});
+
+// ── HEX POINTS ──
+function hexPoints(r){const s=r/18;return[[11.2*s,5.2*s],[25.8*s,5.2*s],[32.7*s,17.4*s],[25.8*s,30.4*s],[10.9*s,30.8*s],[3.3*s,17.4*s]].map(p=>p.join(',')).join(' ');}
+
+// ── SHOW TOOLTIP ──
+function showTooltip(n,e){
+  if(!n.name&&!n.cost&&!n.desc)return;
+  document.getElementById('t-name').textContent=n.name||'';
+  const costEl=document.getElementById('t-cost');
+  costEl.textContent=n.cost||'';
+  costEl.style.display=n.cost?'inline-flex':'none';
+  const descEl=document.getElementById('t-desc');
+  descEl.textContent=n.desc||'';
+  descEl.style.display=n.desc?'block':'none';
+  tooltip.style.display='block';
+  positionTooltip(e);
+}
+function positionTooltip(e){const x=e.clientX+14,y=e.clientY+14;tooltip.style.left=(x+235>window.innerWidth?e.clientX-245:x)+'px';tooltip.style.top=(y+150>window.innerHeight?e.clientY-160:y)+'px';}
+
+// ── RENDER ──
+function render(){
+  // Manage main tree image visibility
+  treeImg.style.visibility=activeSpecialOverlay!==null?'hidden':'visible';
+  // Back button
+  backBtn.style.display=activeSpecialOverlay!==null?'block':'none';
+
+  // Render overlays
+  document.querySelectorAll('.bg-overlay').forEach(e=>e.remove());
+  overlaysData.forEach((ov,i)=>{
+    // Skip special overlays that aren't active; skip normal overlays when a special is active
+    if(ov.special){
+      if(activeSpecialOverlay!==i)return;
+    } else {
+      if(activeSpecialOverlay!==null)return;
+    }
+    const d=document.createElement('div');
+    d.className='bg-overlay';
+    d.style.cssText=`left:${ov.x}px;top:${ov.y}px;width:${ov.w}px;height:${ov.h}px;z-index:2;`;
+    const img=document.createElement('img');
+    img.src=ov.src;
+    img.setAttribute('draggable','false');
+    d.appendChild(img);
+    imgWrapper.appendChild(d);
+  });
+
+  // Render nodes
+  document.querySelectorAll('.hnode').forEach(e=>e.remove());
+  const iw=treeImg.offsetWidth,ih=treeImg.offsetHeight,r=HEX_R;
+  nodes.forEach((n,i)=>{
+    const nodeOverlay=(n.overlayIdx!==undefined&&n.overlayIdx!==null&&n.overlayIdx!=='')?+n.overlayIdx:null;
+    const linkedOverlayIdx=overlaysData.findIndex(ov=>ov.special&&ov.linkedNodeIdx===i);
+    const isActiveOverlayTrigger=linkedOverlayIdx!==-1&&linkedOverlayIdx===activeSpecialOverlay;
+
+    if(activeSpecialOverlay!==null){
+      // Special overlay active: show only its assigned nodes + its own trigger
+      if(!isActiveOverlayTrigger&&nodeOverlay!==activeSpecialOverlay)return;
+    } else {
+      // Normal view: show main-tree nodes only (no overlay assignment)
+      if(nodeOverlay!==null)return;
+    }
+
+    const isTrigger=linkedOverlayIdx!==-1;
+    const dx=n.px/100*iw,dy=n.py/100*ih;
+    const el=document.createElement('div');
+    // All nodes are fully invisible — transparent hitboxes only
+    el.className='hnode';
+    el.style.cssText=`position:absolute;left:${dx}px;top:${dy}px;width:${r*2}px;height:${r*2}px;`;
+    el.innerHTML=`<svg width="${r*2}" height="${r*2}" viewBox="0 0 ${r*2} ${r*2}" style="display:block"><polygon points="${hexPoints(r)}" style="fill:transparent;stroke:none;"/></svg>`;
+
+    // Tooltip for all nodes that have content
+    if(n.name||n.cost||n.desc){
+      el.addEventListener('mouseenter',e2=>showTooltip(n,e2));
+      el.addEventListener('mousemove',e2=>positionTooltip(e2));
+      el.addEventListener('mouseleave',()=>{tooltip.style.display='none';});
+    }
+
+    // Click handler
+    el.addEventListener('click',e2=>{
+      e2.stopPropagation();
+      tooltip.style.display='none';
+      if(isTrigger){
+        if(hasPanned)return;
+        activeSpecialOverlay=activeSpecialOverlay===linkedOverlayIdx?null:linkedOverlayIdx;
+        render();
+      }
+    });
+
+    imgWrapper.appendChild(el);
+  });
+}
+
+// Back button
+backBtn.addEventListener('click',()=>{activeSpecialOverlay=null;render();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&activeSpecialOverlay!==null){activeSpecialOverlay=null;render();}});
+
+// Boot
+treeImg.addEventListener('dragstart',e=>e.preventDefault());
+treeImg.src=IMG_SRC;
+treeImg.onload=()=>{
+  const vw=window.innerWidth,vh=window.innerHeight,iw=treeImg.naturalWidth,ih=treeImg.naturalHeight;
+  const fitScale=Math.min(vw/iw,vh/ih,1);
+  scale=fitScale;panX=(vw-iw*fitScale)/2;panY=(vh-ih*fitScale)/2;
+  applyTransform();
+  render();
+};
+</script>
+</body>
+</html>
